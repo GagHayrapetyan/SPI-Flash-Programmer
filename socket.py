@@ -39,9 +39,10 @@ class Socket:
         while True:
             res = self.read(len(msg) - len(data))
 
-            max_lenght -= len(res)
-            if max_lenght <= 0:
+            if max_lenght <= 0 or res is None:
                 return False
+            else:
+                max_lenght -= len(res)
 
             data = (data + res)[-len(msg):]
 
