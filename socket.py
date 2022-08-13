@@ -8,12 +8,15 @@ class Socket:
         self._page_size = page_size
         self._tries = 3
 
-    def write(self, msg: bytes) -> None:
-        self._sock.write(msg)
+    def write(self, data: bytes) -> None:
+        self._sock.write(data)
         self._sock.flush()
 
     def command(self, cmd: str) -> None:
         self.write(cmd.encode())
+
+    def read_page(self) -> Optional[bytes]:
+        return self.read(self._page_size)
 
     def read(self, length: int) -> Optional[bytes]:
         data = b''

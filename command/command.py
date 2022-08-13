@@ -1,0 +1,7 @@
+HELLO = 'h'
+SEND_ADDRESS = 'a'
+SEND_DATA = 's'
+RECV_DATA = 'r'
+ERASE = 'e'
+READ = 'd'
+WRITE = 'w'
