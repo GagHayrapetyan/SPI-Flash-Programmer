@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 import serial
 
 
@@ -8,12 +8,12 @@ class Socket:
         self._page_size = page_size
         self._tries = 3
 
-    def write(self, msg: str) -> None:
-        self._sock.write(msg.encode())
+    def write(self, msg: bytes) -> None:
+        self._sock.write(msg)
         self._sock.flush()
 
     def command(self, cmd: str) -> None:
-        self.write(cmd)
+        self.write(cmd.encode())
 
     def read(self, length: int) -> Optional[bytes]:
         data = b''
@@ -46,5 +46,5 @@ class Socket:
 
             data = (data + res)[-len(msg):]
 
-            if msg == data:
+            if msg == data.decode():
                 return True
