@@ -1,4 +1,4 @@
-#include "spi_flash.h"
+#include "spi.h"
 
 
 SPIFlash::SPIFlash(byte cs_pin) : _cs_pin(cs_pin) {

@@ -5,10 +5,8 @@
 #if ARDUINO >= 100
 #include <Arduino.h>
 #else
-
 #include <wiring.h>
 #include "pins_arduino.h"
-
 #endif
 
 #include <SPI.h>
@@ -16,9 +14,7 @@
 #ifndef SPI_FLASH_PROGRAMMER_SPI_H
 #define SPI_FLASH_PROGRAMMER_SPI_H
 
-#ifndef
 #define PAGE_SIZE 128
-#endif
 
 #define SPIFLASH_WRITEENABLE      0x06        // write enable
 #define SPIFLASH_WRITEDISABLE     0x04        // write disable
