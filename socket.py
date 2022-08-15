@@ -34,13 +34,12 @@ class Socket:
 
     def wait_for_msg(self, msg: str, max_length: int = 100) -> bool:
         data = b''
-        tryed = 0
 
-        while tryed < self._tries:
-            res = self.read(len(msg) - len(data))
+        while True:
+            res = self._sock.read(len(msg) - len(data))
 
-            if len(res) == 0:
-                tryed += 1
+            if res == b'':
+                continue
 
             max_length -= len(res)
             if max_length < 0:
