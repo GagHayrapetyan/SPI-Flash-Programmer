@@ -72,6 +72,7 @@ void loop() {
       break;
 
      case COMMAND_READ:
+      memset(data, 0, PAGE_SIZE);
       flash.readBytes(address, data, PAGE_SIZE);
       Serial2.print(COMMAND_READ);
       break;
@@ -82,8 +83,6 @@ void loop() {
       break;
 
   }
-
-
 
 }
 

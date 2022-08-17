@@ -1,34 +1,34 @@
-from typing import Optional, Union
+from typing import Optional
 import serial
 
 
-class Socket:
-    def __init__(self, sock: serial.Serial) -> None:
-        self._sock = sock
+class Connection:
+    def __init__(self, serial_conn: serial.Serial) -> None:
+        self._serial = serial_conn
         self._tries = 3
 
     def write(self, data: bytes) -> None:
-        self._sock.write(data)
-        self._sock.flush()
+        self._serial.write(data)
+        self._serial.flush()
 
     def command(self, cmd: str) -> None:
         self.write(cmd.encode())
 
     def read(self, length: int) -> Optional[bytes]:
         data = b''
-        tryed = 0
+        tried = 0
 
-        while len(data) < length and tryed < self._tries:
-            res = self._sock.read(length - len(data))
+        while len(data) < length and tried < self._tries:
+            res = self._serial.read(length - len(data))
 
             if len(res) == 0:
-                tryed += 1
+                tried += 1
                 continue
 
             data += res
 
         if len(data) != length:
-            return None
+            data = None
 
         return data
 
@@ -36,7 +36,7 @@ class Socket:
         data = b''
 
         while True:
-            res = self._sock.read(len(msg) - len(data))
+            res = self._serial.read(len(msg) - len(data))
 
             if res == b'':
                 continue

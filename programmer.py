@@ -1,76 +1,101 @@
 import os
-import serial
-from crc import CrcCalculator, Crc8
+import math
+from abc import ABC, abstractmethod
 from time import sleep
 
-from socket import Socket
-from command import SendCommand, SendData, SendAddress, RecvData
-from command import commands as CMD
+from tqdm import tqdm
+from crc import CrcCalculator, Crc8
+
+from connection import Connection
+from commands import (
+    SendCommand,
+    SendData,
+    SendAddress,
+    RecvData,
+
+    CMD_HELLO,
+    CMD_READ,
+    CMD_WRITE,
+    CMD_ERASE
+)
 
 PAGE_SIZE = 128
 
 
-def write(path: str, s: Socket) -> None:
-    file = os.stat(path)
-    file_size = file.st_size
+def get_file_size(file_path: str) -> int:
+    file = os.stat(file_path)
 
-    address = 0
-    iteration = 0
-    crc_calculator = CrcCalculator(Crc8.CCITT)
-
-    SendCommand(s, CMD.HELLO).execute()
-    SendCommand(s, CMD.ERASE).execute()
-
-    with open(path, 'rb') as f:
-        stop = False
-
-        while not stop:
-            data = f.read(PAGE_SIZE)
-
-            if len(data) < PAGE_SIZE:
-                stop = True
-                data += bytearray([255] * (PAGE_SIZE - len(data)))
-
-            SendAddress(s).execute(address)
-
-            while True:
-                SendData(s).execute(data)
-                SendCommand(s, CMD.WRITE).execute()
-                SendCommand(s, CMD.READ).execute()
-                recv_data = RecvData(s).execute(PAGE_SIZE)
-
-                if crc_calculator.calculate_checksum(recv_data) == crc_calculator.calculate_checksum(data):
-                    break
-
-            address += PAGE_SIZE
-
-            print(iteration, (file_size / PAGE_SIZE) - iteration)
-            iteration += 1
+    return file.st_size
 
 
-def read(path: str, flash_size: int, s: Socket) -> None:
-    address = 0
-    iteration = 0
-    alrady_read = 0
+class ProgrammerCommandInterface(ABC):
+    def __init__(self, conn: Connection) -> None:
+        self._conn = conn
 
-    SendCommand(s, CMD.HELLO).execute()
-
-    with open(path, 'wb') as f:
-        while alrady_read < flash_size:
-            SendAddress(s).execute(address)
-            SendCommand(s, CMD.READ).execute()
-            address += PAGE_SIZE
-            recv_data = RecvData(s).execute(PAGE_SIZE)
-            f.write(recv_data)
-
-            print(iteration, (flash_size / PAGE_SIZE) - iteration)
-            iteration += 1
-            alrady_read += PAGE_SIZE
+    @abstractmethod
+    def execute(self, *args, **kwargs):
+        pass
 
 
-if __name__ == '__main__':
-    serial_sock = serial.Serial(port='COM3', baudrate=115200, timeout=.1)
-    sock = Socket(serial_sock)
+class ProgrammerErase(ProgrammerCommandInterface):
+    def execute(self) -> None:
+        pbar = tqdm(total=1)
+        SendCommand(self._conn, CMD_HELLO).execute()
+        SendCommand(self._conn, CMD_ERASE).execute()
+        pbar.update(1)
+        pbar.close()
 
-    # write('u-boot.bin', sock)
-    read('u-boot_r.bin', 232192, sock)
+
+class ProgrammerWrite(ProgrammerCommandInterface):
+    def __init__(self, conn: Connection):
+        self._crc = CrcCalculator(Crc8.CCITT)
+        self._stop_write = False
+        self._address = 0
+
+        self._cmd_hello = SendCommand(conn, CMD_HELLO)
+        self._cmd_read = SendCommand(conn, CMD_READ)
+        self._cmd_write = SendCommand(conn, CMD_WRITE)
+        self._cmd_write_address = SendAddress(conn)
+        self._cmd_write_data = SendData(conn)
+        self._cmd_read_data = RecvData(conn)
+
+        super().__init__(conn)
+
+    def _write(self, data: bytes) -> None:
+        data = self._correct_data(data)
+        self._cmd_write_address.execute(self._address)
+        self._try_write(data)
+        self._address += PAGE_SIZE
+
+    def _correct_data(self, data: bytes) -> bytes:
+        if len(data) < PAGE_SIZE:
+            self._stop_write = True
+            data += bytearray([255] * (PAGE_SIZE - len(data)))
+
+        return data
+
+    def _try_write(self, data: bytes) -> None:
+        while True:
+            self._cmd_write_data.execute(data)
+            self._cmd_write.execute()
+            self._cmd_read.execute()
+            recv_data = self._cmd_read_data.execute(PAGE_SIZE)
+
+            if self._checksum(data, recv_data):
+                break
+
+    def _checksum(self, data: bytes, recv_data: bytes) -> bool:
+        return self._crc.calculate_checksum(data) == self._crc.calculate_checksum(recv_data)
+
+    def execute(self, file_path: str, address: int = 0) -> None:
+        pbar = tqdm(total=math.ceil(get_file_size(file_path) / PAGE_SIZE))
+        self._address = address
+        self._cmd_hello.execute()
+
+        with open(file_path, 'rb') as f:
+            while not self._stop_write:
+                data = f.read(PAGE_SIZE)
+                self._write(data)
+
+                pbar.update(1)
+            pbar.close()
