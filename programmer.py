@@ -1,6 +1,7 @@
 import os
 import math
 from abc import ABC, abstractmethod
+from enum import Enum
 
 from tqdm import tqdm
 from crc import CrcCalculator, Crc8
@@ -15,7 +16,10 @@ from commands import (
     CMD_HELLO,
     CMD_READ,
     CMD_WRITE,
-    CMD_ERASE
+    CMD_ERASE,
+    CMD_ERASE_64K,
+    CMD_ERASE_4K,
+    CMD_ERASE_32K
 )
 
 PAGE_SIZE = 128
@@ -36,11 +40,23 @@ class ProgrammerCommandInterface(ABC):
         pass
 
 
+class EraseCMD(Enum):
+    ALL = CMD_ERASE
+    K4 = CMD_ERASE_4K
+    K32 = CMD_ERASE_32K
+    K64 = CMD_ERASE_64K
+
+
 class ProgrammerChipErase(ProgrammerCommandInterface):
-    def execute(self) -> None:
+    def __init__(self, conn: Connection, cmd: EraseCMD) -> None:
+        self._cmd = cmd
+        super().__init__(conn)
+
+    def execute(self, address: int = 0) -> None:
         pbar = tqdm(total=1)
         SendCommand(self._conn, CMD_HELLO).execute()
-        SendCommand(self._conn, CMD_ERASE).execute()
+        SendAddress(self._conn).execute(address)
+        SendCommand(self._conn, self._cmd.value).execute()
         pbar.update(1)
         pbar.close()
 
