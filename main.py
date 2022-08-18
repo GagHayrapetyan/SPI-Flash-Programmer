@@ -52,7 +52,7 @@ def main():
     conn = Connection(ser)
 
     if args.command == 'write':
-        ProgrammerWrite(conn).execute(args.filename, args.flash_offset)
+        ProgrammerWrite(conn).execute(args.filename, args.flash_offset, args.file_offset)
     elif args.command == 'read':
         ProgrammerRead(conn).execute(args.filename, args.flash_offset, args.length)
     elif args.command == 'chip_erase':
