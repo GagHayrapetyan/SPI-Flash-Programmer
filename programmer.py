@@ -1,7 +1,6 @@
 import os
 import math
 from abc import ABC, abstractmethod
-from enum import Enum
 
 from tqdm import tqdm
 from crc import CrcCalculator, Crc8
@@ -16,10 +15,7 @@ from commands import (
     CMD_HELLO,
     CMD_READ,
     CMD_WRITE,
-    CMD_ERASE,
-    CMD_ERASE_64K,
-    CMD_ERASE_4K,
-    CMD_ERASE_32K
+    EraseCMD
 )
 
 PAGE_SIZE = 128
@@ -38,13 +34,6 @@ class ProgrammerCommandInterface(ABC):
     @abstractmethod
     def execute(self, *args, **kwargs):
         pass
-
-
-class EraseCMD(Enum):
-    ALL = CMD_ERASE
-    K4 = CMD_ERASE_4K
-    K32 = CMD_ERASE_32K
-    K64 = CMD_ERASE_64K
 
 
 class ProgrammerChipErase(ProgrammerCommandInterface):

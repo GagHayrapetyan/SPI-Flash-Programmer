@@ -1,5 +1,6 @@
 from typing import Optional
 from abc import ABC, abstractmethod
+from enum import Enum
 
 from connection import Connection
 
@@ -13,6 +14,13 @@ CMD_ERASE = 'e'
 CMD_ERASE_4K = 'b'
 CMD_ERASE_32K = 'v'
 CMD_ERASE_64K = 'n'
+
+
+class EraseCMD(Enum):
+    ALL = CMD_ERASE
+    K4 = CMD_ERASE_4K
+    K32 = CMD_ERASE_32K
+    K64 = CMD_ERASE_64K
 
 
 class CommandInterface(ABC):
