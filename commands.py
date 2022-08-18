@@ -7,9 +7,12 @@ CMD_HELLO = 'h'
 CMD_SEND_ADDRESS = 'a'
 CMD_SEND_DATA = 's'
 CMD_RECV_DATA = 'r'
-CMD_ERASE = 'e'
 CMD_READ = 'd'
 CMD_WRITE = 'w'
+CMD_ERASE = 'e'
+CMD_ERASE_4K = 'b'
+CMD_ERASE_32K = 'v'
+CMD_ERASE_64K = 'n'
 
 
 class CommandInterface(ABC):
