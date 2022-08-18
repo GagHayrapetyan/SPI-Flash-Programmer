@@ -1,7 +1,6 @@
 import os
 import math
 from abc import ABC, abstractmethod
-from time import sleep
 
 from tqdm import tqdm
 from crc import CrcCalculator, Crc8
@@ -37,7 +36,7 @@ class ProgrammerCommandInterface(ABC):
         pass
 
 
-class ProgrammerErase(ProgrammerCommandInterface):
+class ProgrammerChipErase(ProgrammerCommandInterface):
     def execute(self) -> None:
         pbar = tqdm(total=1)
         SendCommand(self._conn, CMD_HELLO).execute()
@@ -47,7 +46,7 @@ class ProgrammerErase(ProgrammerCommandInterface):
 
 
 class ProgrammerWrite(ProgrammerCommandInterface):
-    def __init__(self, conn: Connection):
+    def __init__(self, conn: Connection) -> None:
         self._crc = CrcCalculator(Crc8.CCITT)
         self._stop_write = False
         self._address = 0
@@ -60,6 +59,17 @@ class ProgrammerWrite(ProgrammerCommandInterface):
         self._cmd_read_data = RecvData(conn)
 
         super().__init__(conn)
+
+    def _read_file(self, file_path: str) -> None:
+        pbar = tqdm(total=math.ceil(get_file_size(file_path) / PAGE_SIZE))
+
+        with open(file_path, 'rb') as f:
+            while not self._stop_write:
+                data = f.read(PAGE_SIZE)
+                self._write(data)
+
+                pbar.update(1)
+        pbar.close()
 
     def _write(self, data: bytes) -> None:
         data = self._correct_data(data)
@@ -88,14 +98,62 @@ class ProgrammerWrite(ProgrammerCommandInterface):
         return self._crc.calculate_checksum(data) == self._crc.calculate_checksum(recv_data)
 
     def execute(self, file_path: str, address: int = 0) -> None:
-        pbar = tqdm(total=math.ceil(get_file_size(file_path) / PAGE_SIZE))
         self._address = address
         self._cmd_hello.execute()
+        self._read_file(file_path)
 
-        with open(file_path, 'rb') as f:
-            while not self._stop_write:
-                data = f.read(PAGE_SIZE)
-                self._write(data)
 
+class ProgrammerRead(ProgrammerCommandInterface):
+    def __init__(self, conn: Connection, flash_size: int) -> None:
+        self._flash_size = flash_size
+        self._crc = CrcCalculator(Crc8.CCITT)
+        self._address = 0
+
+        self._cmd_hello = SendCommand(conn, CMD_HELLO)
+        self._cmd_read = SendCommand(conn, CMD_READ)
+        self._cmd_write_address = SendAddress(conn)
+        self._cmd_read_data = RecvData(conn)
+
+        super().__init__(conn)
+
+    def _write_file(self, file_path: str, length: int):
+        pbar = tqdm(total=math.ceil(length / PAGE_SIZE))
+
+        with open(file_path, 'wb') as f:
+            while self._address > length:
+                f.write(self._read())
                 pbar.update(1)
-            pbar.close()
+
+        pbar.close()
+
+    def _read(self) -> bytes:
+        self._cmd_write_address.execute(self._address)
+        data = self._try_read_block()
+        self._address += PAGE_SIZE
+
+        return data
+
+    def _try_read_block(self) -> bytes:
+        data = None
+
+        while True:
+            for i in range(3):
+                self._cmd_read.execute()
+
+                if data is None:
+                    data = self._cmd_read_data.execute(PAGE_SIZE)
+                    continue
+
+                if not self._checksum(data, self._cmd_read_data.execute(PAGE_SIZE)):
+                    data = None
+                    break
+            if data is not None:
+                return data
+
+    def _checksum(self, data: bytes, data_new: bytes) -> bool:
+        return self._crc.calculate_checksum(data) == self._crc.calculate_checksum(data_new)
+
+    def execute(self, file_path: str, address: int = 0, length: int = PAGE_SIZE) -> None:
+        self._address = address
+        self._cmd_hello.execute()
+        self._write_file(file_path, length)
