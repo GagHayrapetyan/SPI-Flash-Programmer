@@ -63,6 +63,8 @@ def main():
         ProgrammerChipErase(conn, EraseCMD.K32).execute(args.flash_offset)
     elif args.command == 'erase_64K':
         ProgrammerChipErase(conn, EraseCMD.K64).execute(args.flash_offset)
+    else:
+        parser.print_help()
 
 
 if __name__ == '__main__':
