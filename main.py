@@ -31,6 +31,8 @@ def main():
 
     parser.add_argument('--flash-offset', type=hex_dec, dest='flash_offset', default=0,
                         help='offset for flash read/write/erase in bytes')
+    parser.add_argument('--file-offset', type=hex_dec, dest='file_offset', default=0,
+                        help='offset for file read/write in bytes')
     parser.add_argument('--rate', type=int, dest='baud_rate', default=115200, help='baud-rate of serial connection')
 
     parser.add_argument('command', choices=('ports', 'write', 'read', 'chip_erase', 'erase_4K, erase_32K, erase_64K'),

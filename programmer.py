@@ -65,10 +65,12 @@ class ProgrammerWrite(ProgrammerCommandInterface):
 
         super().__init__(conn)
 
-    def _read_file(self, file_path: str) -> None:
+    def _read_file(self, file_path: str, file_offset: int = 0) -> None:
         pbar = tqdm(total=math.ceil(get_file_size(file_path) / PAGE_SIZE))
 
         with open(file_path, 'rb') as f:
+            f.seek(file_offset)
+
             while not self._stop_write:
                 data = f.read(PAGE_SIZE)
                 self._write(data)
@@ -102,10 +104,10 @@ class ProgrammerWrite(ProgrammerCommandInterface):
     def _checksum(self, data: bytes, recv_data: bytes) -> bool:
         return self._crc.calculate_checksum(data) == self._crc.calculate_checksum(recv_data)
 
-    def execute(self, file_path: str, address: int = 0) -> None:
+    def execute(self, file_path: str, address: int = 0, file_offset: int = 0) -> None:
         self._address = address
         self._cmd_hello.execute()
-        self._read_file(file_path)
+        self._read_file(file_path, file_offset)
 
 
 class ProgrammerRead(ProgrammerCommandInterface):
@@ -122,10 +124,12 @@ class ProgrammerRead(ProgrammerCommandInterface):
 
     def _write_file(self, file_path: str, length: int):
         pbar = tqdm(total=math.ceil(length / PAGE_SIZE))
+        already_read = 0
 
         with open(file_path, 'wb') as f:
-            while self._address < length:
+            while already_read < length:
                 f.write(self._read())
+                already_read += PAGE_SIZE
                 pbar.update(1)
 
         pbar.close()
