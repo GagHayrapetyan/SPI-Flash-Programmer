@@ -1,110 +1,167 @@
-from typing import Optional
-import serial
-from time import sleep
+import os
+import math
+from abc import ABC, abstractmethod
 
-CMD_HELLO = '>'
-CMD_POST_BUFFER = 'p'
-CMD_POST_BUFFER_ADDRESS = 'a'
-CMD_GET_BUFFER = 'g'
+from tqdm import tqdm
+from crc import CrcCalculator, Crc8
+
+from connection import Connection
+from commands import (
+    SendCommand,
+    SendData,
+    SendAddress,
+    RecvData,
+
+    CMD_HELLO,
+    CMD_READ,
+    CMD_WRITE,
+    EraseCMD
+)
+
+PAGE_SIZE = 128
 
 
-class Programmer:
-    def __init__(self, port: str, baud_rate: int, page_size: int) -> None:
-        self._arduino = serial.Serial(port=port, baudrate=baud_rate, timeout=.1)
-        self._page_size = page_size
-        self._tyies = 3
+def get_file_size(file_path: str) -> int:
+    file = os.stat(file_path)
 
-    def _command(self, cmd: str) -> None:
-        self._arduino.write(cmd.encode())
-        self._arduino.flush()
+    return file.st_size
 
-    def _read(self, length: int) -> Optional[bytes]:
-        tryed = 0
-        data = b''
 
-        while len(data) < length and tryed < self._tyies:
-            res = self._arduino.read(length - len(data))
+class ProgrammerCommandInterface(ABC):
+    def __init__(self, conn: Connection) -> None:
+        self._conn = conn
 
-            if len(res) == 0:
-                tryed += 1
-                continue
+    @abstractmethod
+    def execute(self, *args, **kwargs):
+        pass
 
-            data += res
 
-        if len(data) != length:
-            return None
+class ProgrammerChipErase(ProgrammerCommandInterface):
+    def __init__(self, conn: Connection, cmd: EraseCMD) -> None:
+        self._cmd = cmd
+        super().__init__(conn)
+
+    def execute(self, address: int = 0) -> None:
+        pbar = tqdm(total=1)
+        SendCommand(self._conn, CMD_HELLO).execute()
+        SendAddress(self._conn).execute(address)
+        SendCommand(self._conn, self._cmd.value).execute()
+        pbar.update(1)
+        pbar.close()
+
+
+class ProgrammerWrite(ProgrammerCommandInterface):
+    def __init__(self, conn: Connection) -> None:
+        self._crc = CrcCalculator(Crc8.CCITT)
+        self._stop_write = False
+        self._address = 0
+
+        self._cmd_hello = SendCommand(conn, CMD_HELLO)
+        self._cmd_read = SendCommand(conn, CMD_READ)
+        self._cmd_write = SendCommand(conn, CMD_WRITE)
+        self._cmd_write_address = SendAddress(conn)
+        self._cmd_write_data = SendData(conn)
+        self._cmd_read_data = RecvData(conn)
+
+        super().__init__(conn)
+
+    def _read_file(self, file_path: str, file_offset: int = 0) -> None:
+        pbar = tqdm(total=math.ceil(get_file_size(file_path) / PAGE_SIZE))
+
+        with open(file_path, 'rb') as f:
+            f.seek(file_offset)
+
+            while not self._stop_write:
+                data = f.read(PAGE_SIZE)
+                self._write(data)
+
+                pbar.update(1)
+        pbar.close()
+
+    def _write(self, data: bytes) -> None:
+        data = self._correct_data(data)
+        self._cmd_write_address.execute(self._address)
+        self._try_write(data)
+        self._address += PAGE_SIZE
+
+    def _correct_data(self, data: bytes) -> bytes:
+        if len(data) < PAGE_SIZE:
+            self._stop_write = True
+            data += bytearray([255] * (PAGE_SIZE - len(data)))
 
         return data
 
-    def _wait_for(self, msg: bytes, max_len: int = 100) -> bool:
-        tryed = 0
-        data = b''
+    def _try_write(self, data: bytes) -> None:
+        while True:
+            self._cmd_write_data.execute(data)
+            self._cmd_write.execute()
+            self._cmd_read.execute()
+            recv_data = self._cmd_read_data.execute(PAGE_SIZE)
 
-        while tryed < self._tyies:
-            res = self._arduino.read(max(len(msg) - len(data), 1))
+            if self._checksum(data, recv_data):
+                break
 
-            if len(res) == 0:
-                tryed += 1
-                continue
+    def _checksum(self, data: bytes, recv_data: bytes) -> bool:
+        return self._crc.calculate_checksum(data) == self._crc.calculate_checksum(recv_data)
 
-            max_len -= len(res)
-            if max_len <= 0:
-                return False
-
-            data = (data + res)[-len(msg):]
-
-            if msg == data:
-                return True
-
-        print(data)
-
-        return False
-
-    def _wait_for_msg(self, msg: str) -> bool:
-        data = msg.encode()
-
-        return self._wait_for(data)
-
-    def hello(self):
-        self._command(CMD_HELLO)
-
-        if not self._wait_for_msg(CMD_HELLO):
-            raise "blya"
-
-        self._arduino.readall()
-
-    def post_buffer_address(self, addres: int):
-        self._command(CMD_POST_BUFFER_ADDRESS)
-        self._arduino.write(addres)
-
-        if not self._wait_for_msg(CMD_POST_BUFFER_ADDRESS):
-            raise "blya"
+    def execute(self, file_path: str, address: int = 0, file_offset: int = 0) -> None:
+        self._address = address
+        self._cmd_hello.execute()
+        self._read_file(file_path, file_offset)
 
 
-    def post_buffer(self):
-        self._command(CMD_POST_BUFFER + 'assds')
+class ProgrammerRead(ProgrammerCommandInterface):
+    def __init__(self, conn: Connection) -> None:
+        self._crc = CrcCalculator(Crc8.CCITT)
+        self._address = 0
 
-        if not self._wait_for_msg(CMD_POST_BUFFER):
-            raise "blya"
+        self._cmd_hello = SendCommand(conn, CMD_HELLO)
+        self._cmd_read = SendCommand(conn, CMD_READ)
+        self._cmd_write_address = SendAddress(conn)
+        self._cmd_read_data = RecvData(conn)
 
-    def get_buffer(self):
-        self._command(CMD_GET_BUFFER)
+        super().__init__(conn)
 
-        if not self._wait_for_msg(CMD_GET_BUFFER):
-            raise "blya"
+    def _write_file(self, file_path: str, length: int):
+        pbar = tqdm(total=math.ceil(length / PAGE_SIZE))
+        already_read = 0
 
-        data = self._read(5)
-        print(data)
-        if data is None:
-            raise "blya"
+        with open(file_path, 'wb') as f:
+            while already_read < length:
+                f.write(self._read())
+                already_read += PAGE_SIZE
+                pbar.update(1)
 
-        if not self._wait_for_msg(CMD_GET_BUFFER):
-            raise "blya"
+        pbar.close()
 
+    def _read(self) -> bytes:
+        self._cmd_write_address.execute(self._address)
+        data = self._try_read_block()
+        self._address += PAGE_SIZE
 
-if __name__ == '__main__':
-    p = Programmer('COM3', 115200, 128)
+        return data
 
-    p.hello()
-    p.post_buffer_address(chr(11).encode())
-    p.post_buffer_address(chr(22).encode())
+    def _try_read_block(self) -> bytes:
+        data = None
+
+        while True:
+            for i in range(3):
+                self._cmd_read.execute()
+
+                if data is None:
+                    data = self._cmd_read_data.execute(PAGE_SIZE)
+                    continue
+
+                if not self._checksum(data, self._cmd_read_data.execute(PAGE_SIZE)):
+                    data = None
+                    break
+            if data is not None:
+                return data
+
+    def _checksum(self, data: bytes, data_new: bytes) -> bool:
+        return self._crc.calculate_checksum(data) == self._crc.calculate_checksum(data_new)
+
+    def execute(self, file_path: str, address: int = 0, length: int = PAGE_SIZE) -> None:
+        self._address = address
+        self._cmd_hello.execute()
+        self._write_file(file_path, length)
