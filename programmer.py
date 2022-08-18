@@ -104,8 +104,7 @@ class ProgrammerWrite(ProgrammerCommandInterface):
 
 
 class ProgrammerRead(ProgrammerCommandInterface):
-    def __init__(self, conn: Connection, flash_size: int) -> None:
-        self._flash_size = flash_size
+    def __init__(self, conn: Connection) -> None:
         self._crc = CrcCalculator(Crc8.CCITT)
         self._address = 0
 
@@ -120,7 +119,7 @@ class ProgrammerRead(ProgrammerCommandInterface):
         pbar = tqdm(total=math.ceil(length / PAGE_SIZE))
 
         with open(file_path, 'wb') as f:
-            while self._address > length:
+            while self._address < length:
                 f.write(self._read())
                 pbar.update(1)
 
