@@ -35,7 +35,7 @@ def main():
                         help='offset for file read/write in bytes')
     parser.add_argument('--rate', type=int, dest='baud_rate', default=115200, help='baud-rate of serial connection')
 
-    parser.add_argument('command', choices=('ports', 'write', 'read', 'chip_erase', 'erase_4K, erase_32K, erase_64K'),
+    parser.add_argument('command', choices=('ports', 'write', 'read', 'chip_erase', 'erase_4K', 'erase_32K', 'erase_64K'),
                         help='command to execute')
 
     args = parser.parse_args()
