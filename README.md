@@ -1,3 +1,4 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/GagHayrapetyan/SPI-Flash-Programmer/blob/main/LICENSE)
 # SPI Flash Programmer
 Simple Arduino sketch and Python 3 client to program SPI flash chips.
 
