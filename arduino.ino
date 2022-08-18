@@ -7,9 +7,12 @@
 #define COMMAND_SEND_ADDRESS 'a'
 #define COMMAND_SEND_DATA 's'
 #define COMMAND_RECV_DATA 'r'
-#define COMMAND_ERASE 'e'
 #define COMMAND_READ 'd'
 #define COMMAND_WRITE 'w'
+#define COMMAND_ERASE 'e'
+#define COMMAND_ERASE_4K 'b'
+#define COMMAND_ERASE_32K 'v'
+#define COMMAND_ERASE_64K 'n'
 
 
 byte read_socket();
@@ -70,6 +73,25 @@ void loop() {
       while(flash.busy());
       Serial2.print(COMMAND_ERASE);
       break;
+
+     case COMMAND_ERASE_4K:
+      flash.blockErase4K(address);
+      while(flash.busy());
+      Serial2.print(COMMAND_ERASE);
+      break;
+
+     case COMMAND_ERASE_32K:
+      flash.blockErase32K(address);
+      while(flash.busy());
+      Serial2.print(COMMAND_ERASE);
+      break;
+
+     case COMMAND_ERASE_64K:
+      flash.blockErase64K(address);
+      while(flash.busy());
+      Serial2.print(COMMAND_ERASE);
+      break;
+
 
      case COMMAND_READ:
       memset(data, 0, PAGE_SIZE);
